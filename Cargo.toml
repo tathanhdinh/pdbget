@@ -1,0 +1,19 @@
+[package]
+name = "pdbget"
+version = "0.1.0"
+authors = ["Ta Thanh Dinh <tathanhdinh@gmail.com>"]
+
+[dependencies]
+goblin = "*"
+glob = "*"
+clap = "*"
+# walkdir = "*"
+# term = "*"
+# uuid = { version = "*", features = ["serde", "v4"] }
+uuid = { git = "https://github.com/rust-lang-nursery/uuid.git" }
+if_chain = "*"
+reqwest = "*"
+# lazy_static = "*"
+# url = "*"
+indicatif = "*"
+hex = "*"
