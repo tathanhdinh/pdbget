@@ -1,0 +1,10 @@
+- symchk:
+
+symchk /r c:\windows\system32 /s SRV*c:\symbols\*http://msdl.microsoft.com/download/symbols
+
+Microsoft symbol server: 
+ - http://msdl.microsoft.com/download/symbols
+ - https://msdl.microsoft.com/download/symbols
+
+Mozilla symbol server:
+ - https://symbols.mozilla.org/
