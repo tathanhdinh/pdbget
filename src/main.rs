@@ -10,6 +10,7 @@ extern crate reqwest;
 // extern crate url;
 extern crate indicatif;
 extern crate hex;
+extern crate colored;
 
 #[macro_use]
 extern crate if_chain;
@@ -21,6 +22,8 @@ extern crate if_chain;
 // use std::path::Path;
 use std::io::Read;
 use std::io::Write;
+
+use colored::*;
 
 // use uuid::Uuid;
 // use term::Terminal;
@@ -88,56 +91,56 @@ fn response_location(resp: &reqwest::Response) -> Option<&str> {
     // Some("wcsdfs")
 }
 
-fn remote_file_length<'t>(url: &reqwest::Url) -> Result<u64, &'t str> {
-    let client = reqwest::Client::new();
+// fn remote_file_length<'t>(url: &reqwest::Url) -> Result<u64, &'t str> {
+//     let client = reqwest::Client::new();
     
-    if let Ok(response) = client.head(url.clone())
-    .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
-    .send() {
-        let handle_file_size = |resp: &reqwest::Response| {
-            response_length(resp).ok_or("cannot get file length").and_then(|s| {
-                if s > 0 {
-                    if s < std::usize::MAX as u64 {
-                        Ok(s) } else { Err("file too large") }
-                } else { Err("empty file") }
-            })
-        };
+//     if let Ok(response) = client.head(url.clone())
+//     .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
+//     .send() {
+//         let handle_file_size = |resp: &reqwest::Response| {
+//             response_length(resp).ok_or("cannot get file length").and_then(|s| {
+//                 if s > 0 {
+//                     if s < std::usize::MAX as u64 {
+//                         Ok(s) } else { Err("file too large") }
+//                 } else { Err("empty file") }
+//             })
+//         };
 
-        match response.status() {
-            reqwest::StatusCode::Ok => {
-                handle_file_size(&response)
-            },
+//         match response.status() {
+//             reqwest::StatusCode::Ok => {
+//                 handle_file_size(&response)
+//             },
 
-            reqwest::StatusCode::MovedPermanently | reqwest::StatusCode::Found |
-            reqwest::StatusCode::SeeOther | reqwest::StatusCode::TemporaryRedirect |
-            reqwest::StatusCode::PermanentRedirect => {
-                println!("{}", "url redirected");
-                response_location(&response).ok_or("redirected url not found").and_then(|location| {
-                    reqwest::Url::parse(location)
-                    .or(Err("malformed redirected url"))
-                    .and_then(|redirected_url| {
-                        client.head(redirected_url)
-                        .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
-                        .send()
-                        .or(Err("no HEAD response"))
-                        .and_then(|response| {
-                            if response.status() == reqwest::StatusCode::Ok {
-                                handle_file_size(&response) } else { Err("file not found") }
-                        })
-                    })
-                })
-            }
+//             reqwest::StatusCode::MovedPermanently | reqwest::StatusCode::Found |
+//             reqwest::StatusCode::SeeOther | reqwest::StatusCode::TemporaryRedirect |
+//             reqwest::StatusCode::PermanentRedirect => {
+//                 println!("{}", "url redirected");
+//                 response_location(&response).ok_or("redirected url not found").and_then(|location| {
+//                     reqwest::Url::parse(location)
+//                     .or(Err("malformed redirected url"))
+//                     .and_then(|redirected_url| {
+//                         client.head(redirected_url)
+//                         .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
+//                         .send()
+//                         .or(Err("no HEAD response"))
+//                         .and_then(|response| {
+//                             if response.status() == reqwest::StatusCode::Ok {
+//                                 handle_file_size(&response) } else { Err("file not found") }
+//                         })
+//                     })
+//                 })
+//             }
 
-            _ => {
-                println!("status code: {}", response.status());
-                Err("file not found")
-            }
-        }
-    }
-    else {
-        Err("no HEAD response")
-    }
-}
+//             _ => {
+//                 println!("status code: {}", response.status());
+//                 Err("file not found")
+//             }
+//         }
+//     }
+//     else {
+//         Err("no HEAD response")
+//     }
+// }
 
 fn make_pdb_file_url<'t>(compressed: bool, 
                          symbol_server_url: &str, 
@@ -503,15 +506,18 @@ fn main() {
                                                          pdb_age).unwrap(); // should not panic :)
                             download_file(&file_url, out_dir) });
 
-                        match download_result {
-                            Ok(length) => {
-                                println!(" (ok: {} bytes)", length);
-                            },
+                        let download_msg = 
+                            match download_result {
+                                Ok(length) => {
+                                    format!("(ok: {} bytes)", length).bright_green()
+                                    // println!(" (ok: {} bytes)", length);
+                                },
 
-                            Err(msg) => {
-                                println!(" (error: {})", msg);
-                            }
-                        }
+                                Err(msg) => {
+                                    format!("(error: {})", msg).bright_red()
+                                }
+                            };
+                        println!(" {}", download_msg);
                         
                         // match file_length {
                         //     Ok(file_length) => {
