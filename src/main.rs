@@ -208,15 +208,26 @@ fn build_pdb_file_path<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -
                 } else { dir }
             };
 
-            let url_parts: Vec<&str> = file_url.as_str().rsplit('/').collect();
-            let pdb_parts = &url_parts[..3];
+            let url_path = file_url.path();
+            // file_url.path().ok_or("malformed url path").and_then(|path| {
 
-            let mut pdb_filepath = std::path::PathBuf::from(out_dir);
-            pdb_filepath.push(pdb_parts[2]); 
-            pdb_filepath.push(pdb_parts[1]);
-            pdb_filepath.push(pdb_parts[0]);
+            // })
 
-            Ok(pdb_filepath)
+            // let url_parts: Vec<&str> = file_url.as_str().rsplit('/').collect();
+            let url_parts: Vec<&str> = url_path.rsplit('/').collect();
+            if url_parts.len() < 3 {
+                Err("PDB file name's elements are not enough")
+            }
+            else {
+                let pdb_parts = &url_parts[..3];
+
+                let mut pdb_filepath = std::path::PathBuf::from(out_dir);
+                pdb_filepath.push(pdb_parts[2]); 
+                pdb_filepath.push(pdb_parts[1]);
+                pdb_filepath.push(pdb_parts[0]);
+
+                Ok(pdb_filepath)
+            }
         })
     })
 }
@@ -304,8 +315,7 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
 
 fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Result<usize, &'t str> {
     
-    let file_path = build_pdb_file_path(file_url, out_dir)
-    .or_else(|_| Err("bad PDB file path"))?;
+    
     
     let client = reqwest::Client::new();
     
@@ -326,7 +336,9 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Resu
     match response.status() {
         reqwest::StatusCode::Ok => {
             get_file_length(&response).or(Err("cannot get file length")).and_then(|length| {
-               save_pdb_file(&file_path, length as usize, &mut response) 
+                let file_path = build_pdb_file_path(file_url, out_dir)
+                .or_else(|msg| Err(msg))?;
+                save_pdb_file(&file_path, length as usize, &mut response) 
             })
             // let file_length = get_file_length(&response);
             // save_pdb_file(&file_path, file_length, &mut response)
@@ -342,7 +354,7 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Resu
             let redirected_url = reqwest::Url::parse(location)
             .or_else(|_| Err("redirected url malformed"))?;
             
-            let mut response = client.get(redirected_url)
+            let mut response = client.get(redirected_url.clone())
             .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
             .send()
             .or_else(|_| Err("no GET response"))?;
@@ -350,6 +362,8 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Resu
             match response.status() {
                 reqwest::StatusCode::Ok => {
                     get_file_length(&response).or(Err("cannot get file length")).and_then(|length| {
+                        let file_path = build_pdb_file_path(&redirected_url, out_dir)
+                        .or_else(|msg| Err(msg))?;
                         save_pdb_file(&file_path, length as usize, &mut response) 
                     })
                     // save_pdb_file(&file_path, file_length, &mut response)
