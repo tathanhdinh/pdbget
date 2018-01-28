@@ -1,13 +1,10 @@
 #![recursion_limit="256"]
 
-// use goblin::*;
 extern crate goblin;
 extern crate clap;
 extern crate glob;
-// extern crate term;
 extern crate uuid;
 extern crate reqwest;
-// extern crate url;
 extern crate indicatif;
 extern crate hex;
 extern crate colored;
@@ -18,52 +15,10 @@ extern crate if_chain;
 // #[macro_use]
 // extern crate lazy_static;
 
-// use std::fs::File;
-// use std::path::Path;
 use std::io::Read;
 use std::io::Write;
-
 use colored::*;
 
-// use uuid::Uuid;
-// use term::Terminal;
-
-// fn run() -> goblin::error::Result<()> {
-//     let path = Path::new("C:\\Windows\\System32\\ntoskrnl.exe");
-//     let mut fd = File::open(path)?;
-//     let mut buffer = Vec::new();
-//     fd.read_to_end(&mut buffer)?;
-//     match goblin::Object::parse(&buffer)? {
-//         goblin::Object::PE(pe) => {
-//             // println!("pe: {:?}", &pe);
-//             if pe.is_64 {
-//                 println!("PE32+");
-//             }
-//             else {
-//                 println!("PE32");
-//             }
-//         },
-//         _ => {
-//             println!("not a pe");
-//         }
-//     }
-//     Ok(())
-// }
-
-// fn is_pe(file_path: &std::path::Path) -> Result<bool, std::io::Error> {
-//     let mut fd = std::fs::File::open(file_path)?;
-//     let mut buffer = Vec::new();
-//     fd.read_to_end(&mut buffer)?;
-//     match goblin::Object::parse(&buffer) {
-//         Ok(obj) => {
-//             match obj {
-//                 goblin::Object::PE(_) => Ok(true),
-//                 _ => Ok(false)
-//             }
-//         }
-//         Err(_) => Ok(false)
-//     }
-// }
 static RAW_USER_AGENT: &'static str = "Microsoft-Symbol-Server/10.0.0.0";
 static ARG_NAME_INPUT_PE: &'static str = "PE files";
 static ARG_NAME_SYMBOL_SERVER: &'static str = "Symbol server";
@@ -83,65 +38,7 @@ fn response_length(resp: &reqwest::Response) -> Option<u64> {
 fn response_location(resp: &reqwest::Response) -> Option<&str> {
     let loc = resp.headers().get::<reqwest::header::Location>();
     loc.map(|loc| &**loc)
-
-    // let t = loc.map(|loc| *loc);
-    // match t {
-    //     Some(ref a) => Some(a.as_str()),
-    // }
-    // t.map(|ta| ta.as_str())
-    // Some("wcsdfs")
 }
-
-// fn remote_file_length<'t>(url: &reqwest::Url) -> Result<u64, &'t str> {
-//     let client = reqwest::Client::new();
-    
-//     if let Ok(response) = client.head(url.clone())
-//     .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
-//     .send() {
-//         let handle_file_size = |resp: &reqwest::Response| {
-//             response_length(resp).ok_or("cannot get file length").and_then(|s| {
-//                 if s > 0 {
-//                     if s < std::usize::MAX as u64 {
-//                         Ok(s) } else { Err("file too large") }
-//                 } else { Err("empty file") }
-//             })
-//         };
-
-//         match response.status() {
-//             reqwest::StatusCode::Ok => {
-//                 handle_file_size(&response)
-//             },
-
-//             reqwest::StatusCode::MovedPermanently | reqwest::StatusCode::Found |
-//             reqwest::StatusCode::SeeOther | reqwest::StatusCode::TemporaryRedirect |
-//             reqwest::StatusCode::PermanentRedirect => {
-//                 println!("{}", "url redirected");
-//                 response_location(&response).ok_or("redirected url not found").and_then(|location| {
-//                     reqwest::Url::parse(location)
-//                     .or(Err("malformed redirected url"))
-//                     .and_then(|redirected_url| {
-//                         client.head(redirected_url)
-//                         .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
-//                         .send()
-//                         .or(Err("no HEAD response"))
-//                         .and_then(|response| {
-//                             if response.status() == reqwest::StatusCode::Ok {
-//                                 handle_file_size(&response) } else { Err("file not found") }
-//                         })
-//                     })
-//                 })
-//             }
-
-//             _ => {
-//                 println!("status code: {}", response.status());
-//                 Err("file not found")
-//             }
-//         }
-//     }
-//     else {
-//         Err("no HEAD response")
-//     }
-// }
 
 fn make_pdb_file_url<'t>(compressed: bool, 
                          symbol_server_url: &str, 
@@ -166,15 +63,6 @@ fn make_pdb_file_url<'t>(compressed: bool,
             
             // display GUID under Microsoft encoding
             let (first, second, third, last) = pdb_guid.as_fields();
-
-            // let mut file_url = format!("{}/{}/{}{:x}/{}", 
-            //                            symbol_server_url, 
-            //                            &pdb_name, 
-            //                            &pdb_guid.simple().to_string(), 
-            //                         //    first, second, third, hex::encode(last),
-            //                            pdb_age,
-            //                            &pdb_name);
-
             let mut file_url = format!("{}/{}/{:08X}{:04X}{:04X}{}{:X}/{}", 
                                        symbol_server_url, 
                                        &pdb_name, 
@@ -196,7 +84,8 @@ fn make_pdb_file_url<'t>(compressed: bool,
     })
 }
 
-fn build_pdb_file_path<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Result<std::path::PathBuf, &'t str>
+fn build_pdb_file_path<'t>(file_url: &reqwest::Url, 
+                           out_dir: &std::path::Path) -> Result<std::path::PathBuf, &'t str>
 {
     out_dir.to_str().ok_or("malformed output folder path").and_then(|dir| {
         dir.chars().last()
@@ -210,14 +99,10 @@ fn build_pdb_file_path<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -
             };
 
             let url_path = file_url.path();
-            // file_url.path().ok_or("malformed url path").and_then(|path| {
-
-            // })
-
             // let url_parts: Vec<&str> = file_url.as_str().rsplit('/').collect();
             let url_parts: Vec<&str> = url_path.rsplit('/').collect();
             if url_parts.len() < 3 {
-                Err("PDB file name's elements are not enough")
+                Err("PDB file name's elements are insufficient")
             }
             else {
                 let pdb_parts = &url_parts[..3];
@@ -234,7 +119,7 @@ fn build_pdb_file_path<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -
 }
 
 fn create_pdb_file<'t>(file_path: &std::path::PathBuf) -> Result<std::fs::File, &'t str> {
-    // let to_error_msg = |msg| Err(msg);
+
     file_path.file_name().ok_or_else(|| "cannot get PDB file name").or_else(|msg| Err(msg))?;
 
     let file_dir = file_path.parent().ok_or_else(|| "cannot get PDB directory").or_else(|msg| Err(msg))?;
@@ -244,7 +129,10 @@ fn create_pdb_file<'t>(file_path: &std::path::PathBuf) -> Result<std::fs::File, 
     Ok(file)
 }
 
-fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, response: &mut reqwest::Response) -> Result<usize, &'t str> {
+fn save_pdb_file<'t>(file_path: &std::path::PathBuf, 
+                     file_length: usize, 
+                     response: &mut reqwest::Response) -> Result<usize, &'t str> {
+
     let last_result;
 
     match create_pdb_file(&file_path) {
@@ -252,8 +140,6 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
             let mut out_file = std::io::BufWriter::new(out_file);
             let mut buffer = vec![0u8; DOWNLOAD_BUFFER_SIZE]; // capacity = 1024
             let mut downloaded_bytes: usize = 0;
-
-            // println!("file length: {} bytes", file_length);
 
             let progress_bar = indicatif::ProgressBar::new(file_length as u64);
             progress_bar.set_style(indicatif::ProgressStyle::default_bar()
@@ -266,21 +152,18 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
                 if let Ok(read_bytes) = response.read(&mut buffer[..]) {
                     buffer.truncate(read_bytes);
                     if let Err(_) = out_file.write_all(&buffer) {
-                        // error: cannot write to file
                         last_result = Err("cannot write to file");
                         break;
                     }
                     else {
                         downloaded_bytes += read_bytes;
                         if downloaded_bytes > file_length {
-                            // last_result = Ok(downloaded_bytes);
                             last_result = Err("received bytes exceed the file length");
                             break;
                         }
                         else {
                             progress_bar.set_position(downloaded_bytes as u64);
                             if downloaded_bytes == file_length {
-                                // last_result = Ok(file_path.clone());
                                 last_result = Ok(file_length);
                                 break;
                             }
@@ -294,7 +177,6 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
                         last_result = Err("invalid file length")
                     }
                     else {
-                        // last_result = Ok(file_path.clone());
                         last_result = Ok(file_length)
                     }
                     break;
@@ -314,13 +196,16 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
     last_result
 }
 
-fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose_mode: bool) -> Result<usize, &'t str> {
+fn download_file<'t>(file_url: &reqwest::Url, 
+                     out_dir: &std::path::Path, 
+                     verbose_mode: bool) -> Result<usize, &'t str> {
     
     let client = reqwest::Client::new();
     
     if verbose_mode {
         println!("\ttry with url: {}", file_url);
     }
+
     let mut response = client.get(file_url.clone())
     .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
     .send()
@@ -328,6 +213,7 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose
 
     let get_file_length = |resp: &reqwest::Response| {
             response_length(resp).ok_or("cannot get file length").and_then(|s| {
+
                 if s > 0 {
                     if s < std::usize::MAX as u64 {
                         Ok(s) } else { Err("file too large") }
@@ -338,17 +224,17 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose
     match response.status() {
         reqwest::StatusCode::Ok => {
             get_file_length(&response).or(Err("cannot get file length")).and_then(|length| {
+
                 let file_path = build_pdb_file_path(file_url, out_dir)
                 .or_else(|msg| Err(msg))?;
                 save_pdb_file(&file_path, length as usize, &mut response) 
             })
-            // let file_length = get_file_length(&response);
-            // save_pdb_file(&file_path, file_length, &mut response)
         },
 
         reqwest::StatusCode::MovedPermanently | reqwest::StatusCode::Found |
         reqwest::StatusCode::SeeOther | reqwest::StatusCode::TemporaryRedirect |
         reqwest::StatusCode::PermanentRedirect => {
+
             let location = response_location(&response)
             .ok_or_else(|| "redirected url not found")
             .or_else(|msg| Err(msg))?;
@@ -367,12 +253,12 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose
 
             match response.status() {
                 reqwest::StatusCode::Ok => {
+
                     get_file_length(&response).or(Err("cannot get file length")).and_then(|length| {
                         let file_path = build_pdb_file_path(&redirected_url, out_dir)
                         .or_else(|msg| Err(msg))?;
                         save_pdb_file(&file_path, length as usize, &mut response) 
                     })
-                    // save_pdb_file(&file_path, file_length, &mut response)
                 },
 
                 _ => {
@@ -388,12 +274,6 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose
 }
 
 fn main() {
-    // println!("Hello, world!");
-    // ::std::process::exit(
-    // match run() {
-    //     Ok(_) => 0,
-    //     Err(_) => 1,
-    // })
     let matches = clap::App::new("pdbget")
         .version("0.1.0")
         .author("TA Thanh Dinh <tathanhdinh@gmail.com>")
@@ -408,11 +288,7 @@ fn main() {
              .long("server")
              .takes_value(true)
              .required(true)
-             .help("URL of the symbol server (e.g. http://msdl.microsoft.com/download/symbols/)"))
-        // .arg(clap::Arg::with_name("File searching mode")
-        //      .short("r")
-        //      .long("recursive")
-        //      .help("Recursively looking for input files"))
+             .help("URL of the symbol server (e.g. https://msdl.microsoft.com/download/symbols/)"))
         .arg(clap::Arg::with_name(ARG_NAME_OUTPUT_FOLDER)
              .short("o")
              .long("output")
@@ -424,17 +300,15 @@ fn main() {
              .help("Verbose mode"))
         .get_matches();
 
-    let symbol_server_url = matches.value_of(ARG_NAME_SYMBOL_SERVER).unwrap(); // should not panic
+    let symbol_server_url = matches.value_of(ARG_NAME_SYMBOL_SERVER).unwrap(); // should not panic :)
     if let Ok(url) = reqwest::Url::parse(symbol_server_url) {
         let scheme = url.scheme();
         if scheme != "http" && scheme != "https" {
-            // error: support only http or https
             println!("{}", "only http or https is supported");
             return;
         }
     }
     else {
-        // error: invalid url
         println!("{}", "malformed symbol server url");
         return;
     }
@@ -445,7 +319,6 @@ fn main() {
                 |dir| {
             let path = std::path::Path::new(dir);
             if path.exists() {
-                // let dir_metadata = std::fs::metadata(path).or_else(|_| Err("output location not accessible"));
                 std::fs::metadata(path)
                 .or_else(|_| Err("output location not accessible"))
                 .and_then(|mdt| {
@@ -454,23 +327,17 @@ fn main() {
                 })
             }
             else {
-                // given path doesn't exists
                 std::fs::create_dir_all(path)
                 .or_else(|_| Err("output location not found"))
                 .and_then(|_| Ok(path.to_path_buf()))
             }
         });
 
-    match out_dir {
-        Err(msg) => {
-            // should print error
-            println!("{}", msg);
-            return;
-        },
-        _ => {}
-    };
-
-    // let mut console = term::stdout().unwrap();
+    // early return
+    if let Err(msg) = out_dir {
+        println!("{}", msg);
+        return;
+    }
 
     let inputs = matches.values_of("PE files").unwrap();
     let options = glob::MatchOptions::new();
@@ -478,6 +345,7 @@ fn main() {
         if let Ok(entries) = glob::glob_with(name, &options) {
             for entry in entries {
                 if_chain! {
+
                     if let Ok(entry) = entry;
                     if let Ok(mut fd) = std::fs::File::open(entry.as_path());
                     let mut buffer = Vec::new();
@@ -503,22 +371,7 @@ fn main() {
                                                                 pdb_age);
 
                     then {
-                        // for s in codeview_pdb70.signature.iter() { 
-                        //     print!("{:02x} ", s);
-                        // }
-                        // println!("");
 
-                        // let file_length = remote_file_length(&file_url).or_else(|_| {
-                        //     file_url = make_pdb_file_url(true, 
-                        //                                  symbol_server_url, 
-                        //                                  pdb_name, 
-                        //                                  &pdb_guid, 
-                        //                                  pdb_age).unwrap(); // should not panic
-
-                        //     remote_file_length(&file_url).or_else(|_| Err("PDB file not found"))
-                        // });
-
-                        // println!("{}", file_url);
                         let out_dir = out_dir.as_ref().unwrap();
                         println!("Download PDB for {}", entry.to_string_lossy());
 
@@ -533,36 +386,13 @@ fn main() {
                             download_file(&file_url, out_dir, verbose_mode) });
 
                         let download_msg = 
-                            match download_result {
-                                Ok(length) => {
-                                    format!("ok: {} bytes", length).bright_green()
-                                    // println!(" (ok: {} bytes)", length);
-                                },
-
-                                Err(msg) => {
-                                    format!("error: {}", msg).bright_red()
-                                }
-                            };
+                            download_result.map(|length| format!("ok: {} bytes", length).bright_green())
+                            .unwrap_or_else(|msg| format!("error: {}", msg).bright_red());
+                            
                         println!("\t{}", download_msg);
-                        
-                        // match file_length {
-                        //     Ok(file_length) => {
-                        //         println!(" ({} bytes)", file_length);
-                        //         let out_dir = out_dir.as_ref().unwrap();
-                        //         download_file(&file_url, file_length as usize, out_dir).ok();
-                        //     },
-                        //     Err(msg) => {
-                        //         println!(" (error: {})", msg);
-                        //     }
-                        // }
                     }
                 }
             }
         }
-        // match glob::glob_with(name, &options) {
-        //     Err(_) => {},
-        //     Ok(entries) => {
-        //     }
-        // }
     }
 }
