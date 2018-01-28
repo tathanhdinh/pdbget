@@ -68,6 +68,7 @@ static RAW_USER_AGENT: &'static str = "Microsoft-Symbol-Server/10.0.0.0";
 static ARG_NAME_INPUT_PE: &'static str = "PE files";
 static ARG_NAME_SYMBOL_SERVER: &'static str = "Symbol server";
 static ARG_NAME_OUTPUT_FOLDER: &'static str = "Output folder";
+static ARG_NAME_VERBOSE_MODE: &'static str = "Verbose";
 static DOWNLOAD_BUFFER_SIZE: usize = 1024;
 
 // lazy_static! {
@@ -146,8 +147,8 @@ fn make_pdb_file_url<'t>(compressed: bool,
                          symbol_server_url: &str, 
                          pdb_name: &str, 
                          pdb_guid: &uuid::Uuid, 
-                         pdb_age: u32) -> Result<reqwest::Url, &'t str>
-{
+                         pdb_age: u32) -> Result<reqwest::Url, &'t str> {
+                             
     // download url = server_url + "/" + pdb_name + "/" + pdb_guid + pdb_age + "/" + pdb_name
     symbol_server_url.chars().last().ok_or("empty symbol server url").and_then(|last_char| {
         let symbol_server_url = 
@@ -174,13 +175,13 @@ fn make_pdb_file_url<'t>(compressed: bool,
             //                            pdb_age,
             //                            &pdb_name);
 
-            let mut file_url = format!("{}/{}/{:08x}{:04x}{:04x}{}{:x}/{}", 
+            let mut file_url = format!("{}/{}/{:08X}{:04X}{:04X}{}{:X}/{}", 
                                        symbol_server_url, 
                                        &pdb_name, 
                                        first.swap_bytes(), 
                                        second.swap_bytes(), 
                                        third.swap_bytes(), 
-                                       hex::encode(last),
+                                       hex::encode_upper(last),
                                        pdb_age,
                                        &pdb_name);
             if compressed {
@@ -313,12 +314,13 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf, file_length: usize, respons
     last_result
 }
 
-fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Result<usize, &'t str> {
-    
-    
+fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path, verbose_mode: bool) -> Result<usize, &'t str> {
     
     let client = reqwest::Client::new();
     
+    if verbose_mode {
+        println!("\ttry with url: {}", file_url);
+    }
     let mut response = client.get(file_url.clone())
     .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
     .send()
@@ -354,6 +356,10 @@ fn download_file<'t>(file_url: &reqwest::Url, out_dir: &std::path::Path) -> Resu
             let redirected_url = reqwest::Url::parse(location)
             .or_else(|_| Err("redirected url malformed"))?;
             
+            if verbose_mode {
+                println!("\ttry with url: {}", redirected_url);
+            }
+
             let mut response = client.get(redirected_url.clone())
             .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
             .send()
@@ -391,7 +397,7 @@ fn main() {
     let matches = clap::App::new("pdbget")
         .version("0.1.0")
         .author("TA Thanh Dinh <tathanhdinh@gmail.com>")
-        .about("Fetch corresponding PDB (Program DataBase) files from a symbol server")
+        .about("Download PDB (Program DataBase) files from a symbol server")
         .arg(clap::Arg::with_name(ARG_NAME_INPUT_PE)
              .multiple(true)
              .index(1)
@@ -412,6 +418,10 @@ fn main() {
              .long("output")
              .takes_value(true)
              .help("Location for downloaded PDB(s) (default: current folder)"))
+        .arg(clap::Arg::with_name(ARG_NAME_VERBOSE_MODE)
+             .short("v")
+             .long("verbose")
+             .help("Verbose mode"))
         .get_matches();
 
     let symbol_server_url = matches.value_of(ARG_NAME_SYMBOL_SERVER).unwrap(); // should not panic
@@ -510,28 +520,30 @@ fn main() {
 
                         // println!("{}", file_url);
                         let out_dir = out_dir.as_ref().unwrap();
-                        print!("Download PDB for {}", entry.to_string_lossy());
+                        println!("Download PDB for {}", entry.to_string_lossy());
 
-                        let download_result = download_file(&file_url, out_dir).or({
+                        let verbose_mode = matches.is_present(ARG_NAME_VERBOSE_MODE);
+
+                        let download_result = download_file(&file_url, out_dir, verbose_mode).or_else(|_|{
                             file_url = make_pdb_file_url(true, 
                                                          symbol_server_url, 
                                                          pdb_name, 
                                                          &pdb_guid, 
                                                          pdb_age).unwrap(); // should not panic :)
-                            download_file(&file_url, out_dir) });
+                            download_file(&file_url, out_dir, verbose_mode) });
 
                         let download_msg = 
                             match download_result {
                                 Ok(length) => {
-                                    format!("(ok: {} bytes)", length).bright_green()
+                                    format!("ok: {} bytes", length).bright_green()
                                     // println!(" (ok: {} bytes)", length);
                                 },
 
                                 Err(msg) => {
-                                    format!("(error: {})", msg).bright_red()
+                                    format!("error: {}", msg).bright_red()
                                 }
                             };
-                        println!(" {}", download_msg);
+                        println!("\t{}", download_msg);
                         
                         // match file_length {
                         //     Ok(file_length) => {
