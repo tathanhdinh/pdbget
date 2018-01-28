@@ -33,7 +33,7 @@ ARGS:
 pdbget.exe c:\windows\system32\**\* -s http://msdl.microsoft.com/download/symbols -o pdbs
 ```
 
-<img src="https://github.com/tathanhdinh/pdbfetchc/blob/master/screenshots/microsoft.gif?raw=true">
+<img src="https://github.com/tathanhdinh/pdbget/blob/master/screenshots/microsoft.gif?raw=true">
 
 - Download PDBs from Mozilla's symbol server
 
@@ -41,11 +41,11 @@ pdbget.exe c:\windows\system32\**\* -s http://msdl.microsoft.com/download/symbol
 pdbget.exe "C:\Program Files\Mozilla Firefox"\**\* -s https://symbols.mozilla.org/ -o pdbs -v
 ```
 
-<img src="https://github.com/tathanhdinh/pdbfetchc/blob/master/screenshots/mozilla.gif?raw=true">
+<img src="https://github.com/tathanhdinh/pdbget/blob/master/screenshots/mozilla.gif?raw=true">
 
 - Download PDBs from Google's symbol server
 
 ```
 pdbget.exe "C:\Program Files (x86)\Google\Chrome\Application\63.0.3239.132"\**\* -s https://chromium-browser-symsrv.commondatastorage.googleapis.com/ -o pdbs -v
 ```
-<img src="https://github.com/tathanhdinh/pdbfetchc/blob/master/screenshots/mozilla.gif?raw=true">
+<img src="https://github.com/tathanhdinh/pdbget/blob/master/screenshots/mozilla.gif?raw=true">
