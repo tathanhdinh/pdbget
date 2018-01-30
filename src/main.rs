@@ -339,6 +339,12 @@ fn main() {
         return;
     }
 
+    let out_dir = out_dir.as_ref().unwrap();
+
+    let verbose_mode = matches.is_present(ARG_NAME_VERBOSE_MODE);
+
+    let mut buffer = Vec::new();
+
     let inputs = matches.values_of("PE files").unwrap();
     let options = glob::MatchOptions::new();
     for name in inputs {
@@ -347,11 +353,20 @@ fn main() {
                 if_chain! {
 
                     if let Ok(entry) = entry;
-                    if let Ok(mut fd) = std::fs::File::open(entry.as_path());
-                    let mut buffer = Vec::new();
-                    if let Ok(_) = fd.read_to_end(&mut buffer);
+                    let entry_path = entry.as_path();
+                    if let Ok(file_mdt) = std::fs::metadata(entry_path);
+                    
+                    // check if the file is regular since the next open will be blocked
+                    // if the file is a pipe
+                    if file_mdt.file_type().is_file();
+
+                    if let Ok(mut fd) = std::fs::File::open(entry_path);
+                    // if let Ok(_) =  { buffer.clear(); fd.read_to_end(&mut buffer) };
+                    if { buffer.clear(); fd.read_to_end(&mut buffer) }.is_ok();
+                    
                     if let Ok(obj) = goblin::Object::parse(&buffer);
                     if let goblin::Object::PE(pe_obj) = obj;
+                    
                     if let Some(debug_header) = pe_obj.debug_data;
                     if let Some(codeview_pdb70) = debug_header.codeview_pdb70_debug_info;
                     
@@ -371,11 +386,8 @@ fn main() {
                                                                 pdb_age);
 
                     then {
-
-                        let out_dir = out_dir.as_ref().unwrap();
+                        
                         println!("Download PDB for {}", entry.to_string_lossy());
-
-                        let verbose_mode = matches.is_present(ARG_NAME_VERBOSE_MODE);
 
                         let download_result = download_file(&file_url, out_dir, verbose_mode).or_else(|_|{
                             file_url = make_pdb_file_url(true, 
