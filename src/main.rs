@@ -1,13 +1,16 @@
 #![recursion_limit="256"]
 
 extern crate goblin;
-extern crate clap;
 extern crate glob;
 extern crate uuid;
 extern crate reqwest;
 extern crate indicatif;
 extern crate hex;
-extern crate colored;
+// extern crate colored;
+extern crate rayon;
+
+#[macro_use]
+extern crate clap;
 
 #[macro_use]
 extern crate if_chain;
@@ -17,13 +20,15 @@ extern crate if_chain;
 
 use std::io::Read;
 use std::io::Write;
-use colored::*;
+// use colored::*;
+use rayon::prelude::*;
 
 static RAW_USER_AGENT: &'static str = "Microsoft-Symbol-Server/10.0.0.0";
 static ARG_NAME_INPUT_PE: &'static str = "PE files";
 static ARG_NAME_SYMBOL_SERVER: &'static str = "Symbol server";
 static ARG_NAME_OUTPUT_FOLDER: &'static str = "Output folder";
-static ARG_NAME_VERBOSE_MODE: &'static str = "Verbose";
+// static ARG_NAME_VERBOSE_MODE: &'static str = "Verbose";
+static ARG_NAME_CONCURRENT_DONWLOAD: &'static str = "Concurrent download";
 static DOWNLOAD_BUFFER_SIZE: usize = 1024;
 
 // lazy_static! {
@@ -141,12 +146,12 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf,
             let mut buffer = vec![0u8; DOWNLOAD_BUFFER_SIZE]; // capacity = 1024
             let mut downloaded_bytes: usize = 0;
 
-            let progress_bar = indicatif::ProgressBar::new(file_length as u64);
-            progress_bar.set_style(indicatif::ProgressStyle::default_bar()
-                // .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
-                // .progress_chars("##-"));
-                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
-                .progress_chars("=>-"));
+            // let progress_bar = indicatif::ProgressBar::new(file_length as u64);
+            // progress_bar.set_style(indicatif::ProgressStyle::default_bar()
+            //     // .template("[{elapsed_precise}] {bar:40.cyan/blue} {pos:>7}/{len:7} {msg}")
+            //     // .progress_chars("##-"));
+            //     .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+            //     .progress_chars("=>-"));
         
             loop {
                 if let Ok(read_bytes) = response.read(&mut buffer[..]) {
@@ -162,7 +167,7 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf,
                             break;
                         }
                         else {
-                            progress_bar.set_position(downloaded_bytes as u64);
+                            // progress_bar.set_position(downloaded_bytes as u64);
                             if downloaded_bytes == file_length {
                                 last_result = Ok(file_length);
                                 break;
@@ -198,13 +203,13 @@ fn save_pdb_file<'t>(file_path: &std::path::PathBuf,
 
 fn download_file<'t>(file_url: &reqwest::Url, 
                      out_dir: &std::path::Path, 
-                     verbose_mode: bool) -> Result<usize, &'t str> {
+                     /*verbose_mode: bool*/) -> Result<usize, &'t str> {
     
     let client = reqwest::Client::new();
     
-    if verbose_mode {
-        println!("\ttry with url: {}", file_url);
-    }
+    // if verbose_mode {
+    //     println!("\ttry with url: {}", file_url);
+    // }
 
     let mut response = client.get(file_url.clone())
     .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
@@ -242,9 +247,9 @@ fn download_file<'t>(file_url: &reqwest::Url,
             let redirected_url = reqwest::Url::parse(location)
             .or_else(|_| Err("redirected url malformed"))?;
             
-            if verbose_mode {
-                println!("\ttry with url: {}", redirected_url);
-            }
+            // if verbose_mode {
+            //     println!("\ttry with url: {}", redirected_url);
+            // }
 
             let mut response = client.get(redirected_url.clone())
             .header(reqwest::header::UserAgent::new(RAW_USER_AGENT))
@@ -293,23 +298,59 @@ fn main() {
              .short("o")
              .long("output")
              .takes_value(true)
-             .help("Location for downloaded PDB(s) (default: current folder)"))
-        .arg(clap::Arg::with_name(ARG_NAME_VERBOSE_MODE)
-             .short("v")
-             .long("verbose")
-             .help("Verbose mode"))
+             .help("Location for downloaded PDB(s) [default: current folder]"))
+        // .arg(clap::Arg::with_name(ARG_NAME_VERBOSE_MODE)
+        //      .short("v")
+        //      .long("verbose")
+        //      .help("Verbose mode"))
+        .arg(clap::Arg::with_name(ARG_NAME_CONCURRENT_DONWLOAD)
+            .short("t")
+            .long("thread")
+            .takes_value(true)
+            .help("Number of downloading threads [default or 0: best effort]"))
         .get_matches();
+
+    // let thread_number = value_t!(matches, ARG_NAME_CONCURRENT_DONWLOAD, usize).unwrap_or(1);
+    let mut best_effort = false;
+    let mut thread_number = 0;
+    if matches.is_present(ARG_NAME_CONCURRENT_DONWLOAD) {
+        match value_t!(matches, ARG_NAME_CONCURRENT_DONWLOAD, usize) {
+            Ok(value) => {
+                if value == 0 {
+                    best_effort = true;
+                }
+                else {
+                    thread_number = value;
+                }
+            },
+
+            Err(_) => {
+                println!("error: {}", "number of threads invalid");
+                return;
+            }
+        }
+    }
+    else {
+        best_effort = true;
+    }
+
+    if !best_effort {
+        if rayon::initialize(rayon::Configuration::new().num_threads(thread_number)).is_err() {
+            println!("error: cannot set {} downloading threads", thread_number);
+            return;
+        }
+    }
 
     let symbol_server_url = matches.value_of(ARG_NAME_SYMBOL_SERVER).unwrap(); // should not panic :)
     if let Ok(url) = reqwest::Url::parse(symbol_server_url) {
         let scheme = url.scheme();
         if scheme != "http" && scheme != "https" {
-            println!("{}", "only http or https is supported");
+            println!("error: {}", "only http or https is supported");
             return;
         }
     }
     else {
-        println!("{}", "malformed symbol server url");
+        println!("error: {}", "malformed symbol server url");
         return;
     }
 
@@ -335,23 +376,34 @@ fn main() {
 
     // early return
     if let Err(msg) = out_dir {
-        println!("{}", msg);
+        println!("error: {}", msg);
         return;
     }
 
     let out_dir = out_dir.as_ref().unwrap();
 
-    let verbose_mode = matches.is_present(ARG_NAME_VERBOSE_MODE);
+    // let verbose_mode = matches.is_present(ARG_NAME_VERBOSE_MODE);
 
-    let mut buffer = Vec::new();
+    // let concurrent_download = matches.is_present(ARG_NAME_CONCURRENT_DONWLOAD);
+
+    // let mut download_success_count: usize = 0;
+    // let mut download_failed_count: usize = 0;
+    // let mut parsing_failed_count: usize = 0;
 
     let inputs = matches.values_of("PE files").unwrap();
     let options = glob::MatchOptions::new();
     for name in inputs {
         if let Ok(entries) = glob::glob_with(name, &options) {
-            for entry in entries {
-                if_chain! {
+            let entries: Vec<_> = entries.collect();
 
+            let progress_bar = indicatif::ProgressBar::new(entries.len() as u64);
+            progress_bar.set_style(indicatif::ProgressStyle::default_bar()
+                // .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {bytes}/{total_bytes} ({eta})")
+                .template("{spinner:.green} [{elapsed_precise}] [{bar:40.cyan/blue}] {pos:>7}/{len:7} {msg}")
+                .progress_chars("=>-"));
+
+            entries.into_par_iter().for_each(|entry| {
+                if_chain! {
                     if let Ok(entry) = entry;
                     let entry_path = entry.as_path();
                     if let Ok(file_mdt) = std::fs::metadata(entry_path);
@@ -362,7 +414,8 @@ fn main() {
 
                     if let Ok(mut fd) = std::fs::File::open(entry_path);
                     // if let Ok(_) =  { buffer.clear(); fd.read_to_end(&mut buffer) };
-                    if { buffer.clear(); fd.read_to_end(&mut buffer) }.is_ok();
+                    let mut buffer = Vec::new();
+                    if { /*buffer.clear();*/ fd.read_to_end(&mut buffer) }.is_ok();
                     
                     if let Ok(obj) = goblin::Object::parse(&buffer);
                     if let goblin::Object::PE(pe_obj) = obj;
@@ -384,27 +437,37 @@ fn main() {
                                                                 pdb_name, 
                                                                 &pdb_guid, 
                                                                 pdb_age);
-
                     then {
                         
-                        println!("Download PDB for {}", entry.to_string_lossy());
+                        // println!("Download PDB for {}", entry.to_string_lossy());
 
-                        let download_result = download_file(&file_url, out_dir, verbose_mode).or_else(|_|{
+                        let _ = download_file(&file_url, out_dir/*, verbose_mode*/).or_else(|_|{
                             file_url = make_pdb_file_url(true, 
-                                                         symbol_server_url, 
-                                                         pdb_name, 
-                                                         &pdb_guid, 
-                                                         pdb_age).unwrap(); // should not panic :)
-                            download_file(&file_url, out_dir, verbose_mode) });
+                                                        symbol_server_url, 
+                                                        pdb_name, 
+                                                        &pdb_guid, 
+                                                        pdb_age).unwrap(); // should not panic :)
+                            download_file(&file_url, out_dir/*, verbose_mode*/) });
 
-                        let download_msg = 
-                            download_result.map(|length| format!("ok: {} bytes", length).bright_green())
-                            .unwrap_or_else(|msg| format!("error: {}", msg).bright_red());
+                        // if download_result.is_ok() {
+                        //     download_success_count += 1;
+                        // }
+                        progress_bar.set_message(&format!("({} threads)", rayon::current_num_threads()));
+                        progress_bar.inc(1);
+
+                        // let download_msg = 
+                        //     download_result.map(|length| format!("ok: {} bytes", length).bright_green())
+                        //     .unwrap_or_else(|msg| format!("error: {}", msg).bright_red());
                             
-                        println!("\t{}", download_msg);
+                        // println!("\t{}", download_msg);
                     }
                 }
-            }
+            });
+
+            // let msg = format!("Finished, downloaded files at: {}", out_dir.to_string_lossy());
+            // progress_bar.finish_with_message(&msg);
+            progress_bar.finish();
+            println!("Finished, downloaded files at: {}", out_dir.to_string_lossy());
         }
     }
 }
