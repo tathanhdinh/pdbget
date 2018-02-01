@@ -417,8 +417,9 @@ fn main() {
                     let mut buffer = Vec::new();
                     if { /*buffer.clear();*/ fd.read_to_end(&mut buffer) }.is_ok();
                     
-                    if let Ok(obj) = goblin::Object::parse(&buffer);
-                    if let goblin::Object::PE(pe_obj) = obj;
+                    // if let Ok(obj) = { /*println!("okokoko");*/ goblin::Object::parse(&buffer) };
+                    // if let goblin::Object::PE(pe_obj) = { /*println!("{:#?}", obj);*/ obj };
+                    if let Ok(pe_obj) = goblin::pe::PE::parse(&buffer);
                     
                     if let Some(debug_header) = pe_obj.debug_data;
                     if let Some(codeview_pdb70) = debug_header.codeview_pdb70_debug_info;

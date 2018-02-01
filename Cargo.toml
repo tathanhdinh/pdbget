@@ -4,7 +4,9 @@ version = "0.1.0"
 authors = ["Ta Thanh Dinh <tathanhdinh@gmail.com>"]
 
 [dependencies]
-goblin = "*"
+# goblin = "*"
+# goblin = { path = "../goblin" }
+goblin = { git = "https://github.com/tathanhdinh/goblin.git" }
 glob = "*"
 clap = "*"
 # walkdir = "*"

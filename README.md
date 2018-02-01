@@ -20,7 +20,7 @@ FLAGS:
 
 OPTIONS:
     -o, --output <Output folder>    Location for downloaded PDB(s) (default: current folder)
-    -s, --server <Symbol server>    URL of the symbol server (e.g. http://msdl.microsoft.com/download/symbols/)
+    -s, --server <Symbol server>    URL of the symbol server (e.g. https://msdl.microsoft.com/download/symbols/)
 
 ARGS:
     <PE files>...    Input PE file(s)
@@ -30,7 +30,7 @@ ARGS:
 - Download PDBs from Microsoft's symbol server
 
 ```
-pdbget.exe c:\windows\system32\**\* -s http://msdl.microsoft.com/download/symbols -o pdbs
+pdbget.exe c:\windows\system32\**\* -s https://msdl.microsoft.com/download/symbols -o pdbs
 ```
 
 <img src="https://github.com/tathanhdinh/pdbget/blob/master/screenshots/microsoft.gif?raw=true">
