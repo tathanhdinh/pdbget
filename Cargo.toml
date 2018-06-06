@@ -1,24 +1,22 @@
 [package]
 name = "pdbget"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Ta Thanh Dinh <tathanhdinh@gmail.com>"]
 
 [dependencies]
-# goblin = "*"
-# goblin = { path = "../goblin" }
-goblin = { git = "https://github.com/tathanhdinh/goblin.git" }
+goblin = { git = "https://github.com/m4b/goblin.git" }
 glob = "*"
 clap = "*"
-# walkdir = "*"
-# term = "*"
-# uuid = { version = "*", features = ["serde", "v4"] }
 uuid = { git = "https://github.com/rust-lang-nursery/uuid.git" }
 if_chain = "*"
 reqwest = "*"
-# lazy_static = "*"
-# url = "*"
 indicatif = "*"
 hex = "*"
-# colored = "*"
-# threadpool = "*"
 rayon = { git = "https://github.com/rayon-rs/rayon.git" }
+byteorder = "*"
+failure = "*"
+structopt = "*"
+lazy_static = "*"
+walkdir = "*"
+log = "*"
+env_logger = "*"
