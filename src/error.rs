@@ -1,6 +1,6 @@
-use std::{result, io};
+use std::{io, result};
 
-use failure::{Fail};
+use failure::Fail;
 use goblin::error as GoblinError;
 use reqwest;
 
@@ -30,11 +30,11 @@ pub enum Error {
 macro_rules! application_error {
     ($msg:expr) => {
         Error::Application(String::from($msg))
-    }
+    };
 }
 
 macro_rules! fail_with_application_error {
     ($msg:expr) => {
-        return Err(application_error!($msg))
+        return Err(application_error!($msg));
     };
 }

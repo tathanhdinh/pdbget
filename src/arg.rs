@@ -1,10 +1,14 @@
-use std::{path, fs, env, io::{Read, Seek, SeekFrom}};
+use std::{
+    env, fs,
+    io::{Read, Seek, SeekFrom},
+    path,
+};
 
-use structopt::StructOpt;
-use walkdir::WalkDir;
-use reqwest::{Url};
 use byteorder::{LittleEndian, ReadBytesExt};
 use rayon::prelude::*;
+use reqwest::Url;
+use structopt::StructOpt;
+use walkdir::WalkDir;
 
 use error::{Error, Result};
 
@@ -15,18 +19,28 @@ fn try_parse_url(url: &str) -> Result<Url> {
 #[derive(StructOpt, Debug)]
 #[structopt(name = "pdbget")]
 struct PdbgetArg {
-    #[structopt(parse(from_os_str), 
-                help = "PE file or folder to get pdbs")]
+    #[structopt(
+        name = "input",
+        parse(from_os_str),
+        help = "PE file or folder (recursively traversed)"
+    )]
     input_path: path::PathBuf,
 
-    #[structopt(short = "o", 
-                long = "out", 
-                help = "output directory (default: current)")]
+    #[structopt(
+        name = "output",
+        short = "o",
+        long = "out",
+        help = "Directory to save downloaded pdbs (default: current)"
+    )]
     output_path: Option<String>,
-    
-    #[structopt(short = "u", 
-                long = "url", 
-                parse(try_from_str = "try_parse_url"), help = "symbol server url (e.g. https://msdl.microsoft.com/download/symbols/)")]
+
+    #[structopt(
+        name = "url",
+        short = "s",
+        long = "server",
+        parse(try_from_str = "try_parse_url"),
+        help = "Symbol server url (e.g. https://msdl.microsoft.com/download/symbols/)"
+    )]
     symbol_server_url: Url,
 }
 
@@ -53,9 +67,8 @@ impl Config {
                 if let Ok(len) = file.read(&mut buffer);
                 if len == buffer.len();
                 if let Ok(pe_sig) = (&buffer[..]).read_u32::<LittleEndian>();
-                if pe_sig == 0x4550;
                 then {
-                    true
+                    pe_sig == 0x4550
                 } else {
                     false
                 }
@@ -75,18 +88,28 @@ impl Config {
                 let file_paths: Vec<path::PathBuf> = WalkDir::new(args.input_path)
                     .into_iter()
                     .filter_map(|e| e.ok())
-                    .filter_map(|e| if e.file_type().is_file() { Some(e) } else { None} )
-                    .map(|e| e.path().to_owned()).collect();
+                    .filter_map(|e| {
+                        if e.file_type().is_file() {
+                            Some(e)
+                        } else {
+                            None
+                        }
+                    })
+                    .map(|e| e.path().to_owned())
+                    .collect();
 
                 // concurrency: assume that is_pe is costly
-                file_paths.into_par_iter().filter(|p| is_pe(p.as_path())).collect()
+                file_paths
+                    .into_par_iter()
+                    .filter(|p| is_pe(p.as_path()))
+                    .collect()
             } else {
                 fail_with_application_error!("input path is neither file nor directory")
             }
         };
 
         if pe_files.is_empty() {
-            fail_with_application_error!("cannot detect any PE from input")
+            fail_with_application_error!("cannot recognize any PE from input path")
         }
 
         let pdb_dir = {
@@ -94,12 +117,15 @@ impl Config {
                 let path = path::PathBuf::from(output_path);
                 fs::create_dir_all(&path).map_err(Error::Io)?;
                 path
-
             } else {
                 env::current_dir().map_err(Error::Io)?
             }
         };
 
-        Ok(Config { pe_files, pdb_dir, symbol_server: args.symbol_server_url })
+        Ok(Config {
+            pe_files,
+            pdb_dir,
+            symbol_server: args.symbol_server_url,
+        })
     }
 }
