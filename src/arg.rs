@@ -4,19 +4,23 @@ use std::{
     path,
 };
 
-use byteorder::{LittleEndian, ReadBytesExt};
-use rayon::prelude::*;
-use reqwest::Url;
-use structopt::StructOpt;
-use walkdir::WalkDir;
+use {
+    byteorder::{LittleEndian, ReadBytesExt},
+    if_chain::*,
+    rayon::prelude::*,
+    reqwest::Url,
+    structopt::StructOpt,
+    walkdir::WalkDir,
+};
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 
 fn try_parse_url(url: &str) -> Result<Url> {
-    Url::parse(url).map_err(Error::UrlParsing)
+    Url::parse(url).map_err(From::from)
+    // .map_err(Error::UrlParsing)
 }
 
-#[derive(StructOpt, Debug)]
+#[derive(StructOpt)]
 #[structopt(name = "pdbget")]
 struct PdbgetArg {
     #[structopt(
@@ -45,7 +49,7 @@ struct PdbgetArg {
 }
 
 pub(super) struct Config {
-    pub(crate) pe_files: Vec<path::PathBuf>,
+    input_path: path::PathBuf,
     pub(crate) pdb_dir: path::PathBuf,
     pub(crate) symbol_server: Url,
 }
@@ -54,6 +58,24 @@ impl Config {
     pub fn new() -> Result<Config> {
         let args = PdbgetArg::from_args();
 
+        let pdb_dir = {
+            if let Some(ref output_path) = args.output_path {
+                let path = path::PathBuf::from(output_path);
+                fs::create_dir_all(&path)?;
+                path
+            } else {
+                env::current_dir()?
+            }
+        };
+
+        Ok(Config {
+            pdb_dir,
+            input_path: args.input_path,
+            symbol_server: args.symbol_server_url,
+        })
+    }
+
+    pub fn scan_pe_files(&self) -> Result<Vec<path::PathBuf>> {
         let is_pe = |file_path: &path::Path| {
             let mut buffer = [0u8; 64];
             if_chain! {
@@ -76,16 +98,18 @@ impl Config {
         };
 
         let pe_files = {
-            let input_mtd = fs::metadata(&args.input_path).map_err(Error::Io)?;
+            let ref input_path = self.input_path;
+
+            let input_mtd = fs::metadata(input_path)?;
 
             if input_mtd.is_file() {
-                if is_pe(&args.input_path) {
-                    vec![args.input_path]
+                if is_pe(input_path) {
+                    vec![input_path.clone()]
                 } else {
                     vec![]
                 }
             } else if input_mtd.is_dir() {
-                let file_paths: Vec<path::PathBuf> = WalkDir::new(args.input_path)
+                let file_paths: Vec<path::PathBuf> = WalkDir::new(input_path)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter_map(|e| {
@@ -112,20 +136,6 @@ impl Config {
             fail_with_application_error!("cannot recognize any PE from input path")
         }
 
-        let pdb_dir = {
-            if let Some(ref output_path) = args.output_path {
-                let path = path::PathBuf::from(output_path);
-                fs::create_dir_all(&path).map_err(Error::Io)?;
-                path
-            } else {
-                env::current_dir().map_err(Error::Io)?
-            }
-        };
-
-        Ok(Config {
-            pe_files,
-            pdb_dir,
-            symbol_server: args.symbol_server_url,
-        })
+        Ok(pe_files)
     }
 }

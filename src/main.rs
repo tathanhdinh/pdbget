@@ -1,26 +1,5 @@
-#![feature(rust_2018_preview)]
 #![feature(generators, generator_trait)]
 #![recursion_limit = "128"]
-
-extern crate byteorder;
-extern crate env_logger;
-extern crate glob;
-extern crate goblin;
-extern crate hex;
-extern crate indicatif;
-extern crate rayon;
-extern crate reqwest;
-extern crate uuid;
-extern crate walkdir;
-
-#[macro_use]
-extern crate if_chain;
-#[macro_use]
-extern crate structopt;
-#[macro_use]
-extern crate failure;
-#[macro_use]
-extern crate log;
 
 #[macro_use]
 mod error;
@@ -29,8 +8,10 @@ mod pdb;
 
 use std::result;
 
-use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
+use {
+    indicatif::{ProgressBar, ProgressStyle},
+    rayon::prelude::*,
+};
 
 type GlobalResult = result::Result<(), failure::Error>;
 
@@ -39,8 +20,12 @@ fn main() -> GlobalResult {
 
     let config = arg::Config::new()?;
 
+    print!("Scanning PE files, please wait...");
+    let pe_files = config.scan_pe_files()?;
+    println!("ok. Downloading PDBs...");
+
     // lazy generator
-    let pdb_generator = pdb::PdbGenerator::new(config.pe_files);
+    let pdb_generator = pdb::PdbGenerator::new(pe_files);
     let pdbs: Vec<pdb::Pdb> = pdb_generator.into_iter().collect();
 
     let progress_bar = ProgressBar::new(pdbs.len() as u64);
@@ -54,7 +39,7 @@ fn main() -> GlobalResult {
     // concurrency: download is costly?
     pdbs.par_iter().for_each(|pdb| {
         if let Err(err) = pdb.download(&symbol_server, &target_dir) {
-            warn!("{}", err);
+            log::warn!("{}", err);
         }
         progress_bar.inc(1);
     });

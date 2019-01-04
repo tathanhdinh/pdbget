@@ -5,12 +5,14 @@ use std::{
     path,
 };
 
-use goblin::pe;
-use hex::encode_upper;
-use reqwest::{header::USER_AGENT, Client, Url};
-use uuid::Uuid;
+use {
+    goblin::pe,
+    hex::encode_upper,
+    reqwest::{header::USER_AGENT, Client, Url},
+    uuid::Uuid,
+};
 
-use error::{Error, Result};
+use crate::error::{Error, Result};
 
 // thread_local! {
 //     static PDBGET_USER_AGENT: UserAgent = UserAgent::new("Microsoft-Symbol-Server/10.0.0.0");
@@ -26,9 +28,9 @@ impl Pdb {
     pub fn from(file: &path::PathBuf) -> Result<Self> {
         let mut buffer = vec![];
         let pe_obj = {
-            let mut fd = fs::File::open(file).map_err(Error::Io)?;
-            fd.read_to_end(&mut buffer).map_err(Error::Io)?;
-            pe::PE::parse(&buffer).map_err(Error::PeParsing)?
+            let mut fd = fs::File::open(file)?;
+            fd.read_to_end(&mut buffer)?;
+            pe::PE::parse(&buffer)?
         };
 
         let debug_data = pe_obj
@@ -90,8 +92,8 @@ impl Pdb {
             client
                 .get(url.clone())
                 .header(USER_AGENT, "Microsoft-Symbol-Server/10.0.0.0")
-                .send()
-                .map_err(Error::Connection)?
+                .send()?
+                // .map_err(Error::NetworkConnection)?
 
             // PDBGET_USER_AGENT
             //     .with(|agent| {
@@ -111,15 +113,18 @@ impl Pdb {
 
         let mut file = {
             let file_dir = file_path.parent().unwrap();
-            fs::create_dir_all(file_dir).map_err(Error::Io)?;
-            let file = fs::File::create(&file_path).map_err(Error::Io)?;
+            fs::create_dir_all(file_dir)?;
+            let file = fs::File::create(&file_path)?;
             BufWriter::new(file)
         };
 
         // download
         for byte in response.bytes() {
-            let byte = byte.map_err(Error::Io)?;
-            file.write(&[byte]).map_err(Error::Io)?;
+            // let byte = byte?;
+            let count = file.write(&[byte?])?;
+            if count == 0 {
+                fail_with_application_error!("cannot write more data into file");
+            }
         }
 
         Ok(file_path)
@@ -146,7 +151,7 @@ impl PdbGenerator {
                     if let Ok(pdb) = Pdb::from(&pe) {
                         yield pdb
                     } else {
-                        warn!("not a PE: {:#?}", &pe);
+                        log::warn!("not a PE: {:#?}", &pe);
                     }
                 }
 
@@ -165,7 +170,9 @@ impl PdbGenerator {
 
                 fn next(&mut self) -> Option<Self::Item> {
                     match unsafe { self.0.resume() } {
-                        GeneratorState::Yielded(y) => Some(y),
+                        GeneratorState::Yielded(y) => {
+                            Some(y)
+                        },
                         GeneratorState::Complete(_) => None,
                     }
                 }
