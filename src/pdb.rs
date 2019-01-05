@@ -10,6 +10,7 @@ use {
     hex::encode_upper,
     reqwest::{header::USER_AGENT, Client, Url},
     uuid::Uuid,
+    bytes::BytesMut,
 };
 
 use crate::error::{Error, Result};
@@ -17,6 +18,8 @@ use crate::error::{Error, Result};
 // thread_local! {
 //     static PDBGET_USER_AGENT: UserAgent = UserAgent::new("Microsoft-Symbol-Server/10.0.0.0");
 // }
+static PDBGET_USER_AGENT: &str = "Microsoft-Symbol-Server/10.0.0.0";
+const DOWNLOAD_DATA_BUFFER_SIZE: usize = 4 * 1024;
 
 pub(super) struct Pdb {
     name: String,
@@ -33,12 +36,15 @@ impl Pdb {
             pe::PE::parse(&buffer)?
         };
 
-        let debug_data = pe_obj
-            .debug_data
-            .ok_or_else(|| application_error!("Debug data not found in PE file"))?;
-        let codeview_pdb70 = debug_data
-            .codeview_pdb70_debug_info
-            .ok_or_else(|| application_error!("CodeView PDB 7.0 information not found"))?;
+        let debug_data = pe_obj.debug_data.ok_or_else(|| {
+            application_error!(format!("PE debug data not found, file: {:?}", file))
+        })?;
+        let codeview_pdb70 = debug_data.codeview_pdb70_debug_info.ok_or_else(|| {
+            application_error!(format!(
+                "CodeView PDB 7.0 information not found, file: {:?}",
+                file
+            ))
+        })?;
 
         let name = {
             let base_name = codeview_pdb70
@@ -46,8 +52,10 @@ impl Pdb {
                 .split(|&c| c == b'\\')
                 .last()
                 .unwrap_or(codeview_pdb70.filename);
+
             let name = String::from_utf8(base_name.to_vec())
-                .map_err(|_| application_error!("bad PDB file name"))?;
+                .map_err(|_| application_error!(format!("bad PDB name, file: {:?}", file)))?;
+
             let name = name.trim_matches(char::from(0));
             name.to_owned()
         };
@@ -76,7 +84,8 @@ impl Pdb {
             )
         };
 
-        let response = {
+        // send GET request and get response
+        let mut response = {
             let url = {
                 let new_url_path = format!(
                     "{}/{}/{}/{}",
@@ -90,10 +99,10 @@ impl Pdb {
 
             let client = Client::new();
             client
-                .get(url.clone())
-                .header(USER_AGENT, "Microsoft-Symbol-Server/10.0.0.0")
+                .get(url)
+                .header(USER_AGENT, PDBGET_USER_AGENT)
                 .send()?
-                // .map_err(Error::NetworkConnection)?
+            // .map_err(Error::NetworkConnection)?
 
             // PDBGET_USER_AGENT
             //     .with(|agent| {
@@ -103,6 +112,17 @@ impl Pdb {
             //     .map_err(Error::Connection)?
         };
 
+        // check response
+        let status = response.status();
+        if !status.is_success() {
+            fail_with_application_error!(format!(
+                "bad response, url: {}, code: {}",
+                response.url(),
+                status
+            ));
+        }
+
+        // prepare file for data
         let file_path = {
             let mut file_path = path::PathBuf::from(dir);
             file_path.push(&self.name);
@@ -118,14 +138,23 @@ impl Pdb {
             BufWriter::new(file)
         };
 
-        // download
-        for byte in response.bytes() {
-            // let byte = byte?;
-            let count = file.write(&[byte?])?;
+        // download data and save
+        let mut data_buffer = BytesMut::with_capacity(DOWNLOAD_DATA_BUFFER_SIZE);
+        unsafe { data_buffer.set_len(data_buffer.capacity()) };
+        loop {
+            let count = response.read(&mut data_buffer)?;
             if count == 0 {
-                fail_with_application_error!("cannot write more data into file");
+                break;
             }
+            file.write_all(&data_buffer[0..count])?;
         }
+        // for byte in response.bytes() {
+        //     // let byte = byte?;
+        //     let count = file.write(&[byte?])?;
+        //     if count == 0 {
+        //         fail_with_application_error!(format!("cannot write data, file: {:?}", file_path));
+        //     }
+        // }
 
         Ok(file_path)
     }
@@ -170,9 +199,7 @@ impl PdbGenerator {
 
                 fn next(&mut self) -> Option<Self::Item> {
                     match unsafe { self.0.resume() } {
-                        GeneratorState::Yielded(y) => {
-                            Some(y)
-                        },
+                        GeneratorState::Yielded(y) => Some(y),
                         GeneratorState::Complete(_) => None,
                     }
                 }

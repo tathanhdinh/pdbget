@@ -6,22 +6,29 @@ mod error;
 mod arg;
 mod pdb;
 
-use std::result;
+use std::{
+    io::{self, Write},
+};
 
 use {
     indicatif::{ProgressBar, ProgressStyle},
     rayon::prelude::*,
 };
 
-type GlobalResult = result::Result<(), failure::Error>;
+// type GlobalResult = result::Result<(), error::Error>;
 
-fn main() -> GlobalResult {
+fn main() -> error::Result<()> {
     env_logger::init();
 
     let config = arg::Config::new()?;
 
     print!("Scanning PE files, please wait...");
+    io::stdout().flush()?;
+
     let pe_files = config.scan_pe_files()?;
+    if pe_files.is_empty() {
+        fail_with_application_error!("input path is not (or has no) PE");
+    }
     println!("ok. Downloading PDBs...");
 
     // lazy generator

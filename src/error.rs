@@ -1,11 +1,6 @@
-use std::{
-    io::Error as IOError,
-    result};
+use std::{io::Error as IOError, result};
 
-use {
-    failure::Fail,
-    goblin::error::Error as GoblinError,
-    reqwest};
+use {failure::Fail, goblin::error::Error as GoblinError, reqwest};
 
 pub type Result<T> = result::Result<T, Error>;
 
@@ -56,7 +51,7 @@ impl From<reqwest::Error> for Error {
 
 macro_rules! application_error {
     ($msg:expr) => {
-        Error::Application(String::from($msg))
+        crate::error::Error::Application(String::from($msg))
     };
 }
 

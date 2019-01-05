@@ -13,7 +13,7 @@ use {
     walkdir::WalkDir,
 };
 
-use crate::error::{Error, Result};
+use crate::error::Result;
 
 fn try_parse_url(url: &str) -> Result<Url> {
     Url::parse(url).map_err(From::from)
@@ -131,10 +131,6 @@ impl Config {
                 fail_with_application_error!("input path is neither file nor directory")
             }
         };
-
-        if pe_files.is_empty() {
-            fail_with_application_error!("cannot recognize any PE from input path")
-        }
 
         Ok(pe_files)
     }
