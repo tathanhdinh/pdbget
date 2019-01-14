@@ -6,9 +6,7 @@ mod error;
 mod arg;
 mod pdb;
 
-use std::{
-    io::{self, Write},
-};
+use std::io::{self, Write};
 
 use {
     indicatif::{ProgressBar, ProgressStyle},

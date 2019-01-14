@@ -1,11 +1,29 @@
-use std::{io::Error as IOError, result};
+use std::{io::Error as IOError, path, result};
 
 use {failure::Fail, goblin::error::Error as GoblinError, reqwest};
 
-pub type Result<T> = result::Result<T, Error>;
+pub(crate) type Result<T> = result::Result<T, Error>;
 
 #[derive(Fail, Debug)]
-pub enum Error {
+pub(crate) enum Others {
+    #[fail(display = "PE debug data not found ({})", _0)]
+    PeDebugNotFound(String),
+
+    #[fail(display = "CodeView PDB 7.0 information not found ({})", _0)]
+    PeCodeViewPdbNotFound(String),
+
+    #[fail(display = "bad PDB file name ({})", _0)]
+    PdbBadName(String),
+
+    #[fail(display = "input not found ({})", _0)]
+    InputNotFound(String),
+
+    #[fail(display = "server bad response ({})", _0)]
+    ServerBadResponse(String),
+}
+
+#[derive(Fail, Debug)]
+pub(crate) enum Error {
     #[fail(display = "I/O error: {}", _0)]
     IO(#[cause] IOError),
 
@@ -20,6 +38,9 @@ pub enum Error {
 
     #[fail(display = "Application error: {}", _0)]
     Application(String),
+
+    #[fail(display = "Application error: ")]
+    Others,
 
     #[fail(display = "End of generator")]
     StopGeneration,

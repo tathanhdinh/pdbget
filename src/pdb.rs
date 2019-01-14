@@ -1,16 +1,16 @@
 use std::{
-    fs,
+    convert, fmt, fs,
     io::{BufWriter, Read, Write},
     ops::{Generator, GeneratorState},
-    path,
+    path::{Path, PathBuf},
 };
 
 use {
+    bytes::BytesMut,
     goblin::pe,
     hex::encode_upper,
     reqwest::{header::USER_AGENT, Client, Url},
     uuid::Uuid,
-    bytes::BytesMut,
 };
 
 use crate::error::{Error, Result};
@@ -28,10 +28,10 @@ pub(super) struct Pdb {
 }
 
 impl Pdb {
-    pub fn from(file: &path::PathBuf) -> Result<Self> {
+    pub fn from<P: AsRef<Path> + fmt::Debug>(file: P) -> Result<Self> {
         let mut buffer = vec![];
         let pe_obj = {
-            let mut fd = fs::File::open(file)?;
+            let mut fd = fs::File::open(&file)?;
             fd.read_to_end(&mut buffer)?;
             pe::PE::parse(&buffer)?
         };
@@ -70,7 +70,15 @@ impl Pdb {
         })
     }
 
-    pub fn download(&self, symbol_server_url: &Url, dir: &path::Path) -> Result<path::PathBuf> {
+    // pub fn download<P: AsRef<Path>, U: AsRef<Url>>(&self, symbol_server_url: &Url, dir: P) -> Result<PathBuf> {
+    pub fn download<P: AsRef<Path>, U: AsRef<str>>(
+        &self,
+        symbol_server_url: U,
+        dir: P,
+    ) -> Result<PathBuf>
+    where
+        PathBuf: convert::From<P>,
+    {
         // Microsoft GUID encoding
         let pdb_guid_age = {
             let (b0, b1, b2, b3) = self.guid.as_fields();
@@ -89,7 +97,7 @@ impl Pdb {
             let url = {
                 let new_url_path = format!(
                     "{}/{}/{}/{}",
-                    symbol_server_url.as_str(),
+                    symbol_server_url.as_ref(),
                     &self.name,
                     &pdb_guid_age,
                     &self.name
@@ -124,7 +132,7 @@ impl Pdb {
 
         // prepare file for data
         let file_path = {
-            let mut file_path = path::PathBuf::from(dir);
+            let mut file_path = PathBuf::from(dir);
             file_path.push(&self.name);
             file_path.push(&pdb_guid_age);
             file_path.push(&self.name);
@@ -165,16 +173,16 @@ type YT = Pdb;
 type RT = Result<()>;
 
 pub(super) struct PdbGenerator {
-    pe_files: Vec<path::PathBuf>,
+    pe_files: Vec<PathBuf>,
 }
 
 impl PdbGenerator {
-    pub(super) fn new(pe_files: Vec<path::PathBuf>) -> Self {
+    pub(super) fn new(pe_files: Vec<PathBuf>) -> Self {
         PdbGenerator { pe_files }
     }
 
     pub(super) fn into_iter(self) -> impl Iterator<Item = YT> {
-        fn pdb_generator(pe_files: Vec<path::PathBuf>) -> impl Generator<Yield = YT, Return = RT> {
+        fn pdb_generator(pe_files: Vec<PathBuf>) -> impl Generator<Yield = YT, Return = RT> {
             move || {
                 for pe in pe_files {
                     if let Ok(pdb) = Pdb::from(&pe) {

@@ -1,7 +1,7 @@
 use std::{
     env, fs,
     io::{Read, Seek, SeekFrom},
-    path,
+    path::{Path, PathBuf},
 };
 
 use {
@@ -28,7 +28,7 @@ struct PdbgetArg {
         parse(from_os_str),
         help = "PE file or folder (recursively traversed)"
     )]
-    input_path: path::PathBuf,
+    input_path: PathBuf,
 
     #[structopt(
         name = "output",
@@ -49,8 +49,8 @@ struct PdbgetArg {
 }
 
 pub(super) struct Config {
-    input_path: path::PathBuf,
-    pub(crate) pdb_dir: path::PathBuf,
+    input_path: PathBuf,
+    pub(crate) pdb_dir: PathBuf,
     pub(crate) symbol_server: Url,
 }
 
@@ -60,7 +60,7 @@ impl Config {
 
         let pdb_dir = {
             if let Some(ref output_path) = args.output_path {
-                let path = path::PathBuf::from(output_path);
+                let path = PathBuf::from(output_path);
                 fs::create_dir_all(&path)?;
                 path
             } else {
@@ -75,8 +75,8 @@ impl Config {
         })
     }
 
-    pub fn scan_pe_files(&self) -> Result<Vec<path::PathBuf>> {
-        let is_pe = |file_path: &path::Path| {
+    pub fn scan_pe_files(&self) -> Result<Vec<PathBuf>> {
+        let is_pe = |file_path: &Path| {
             let mut buffer = [0u8; 64];
             if_chain! {
                 if let Ok(mut file) = fs::File::open(file_path);
@@ -109,7 +109,7 @@ impl Config {
                     vec![]
                 }
             } else if input_mtd.is_dir() {
-                let file_paths: Vec<path::PathBuf> = WalkDir::new(input_path)
+                let file_paths: Vec<PathBuf> = WalkDir::new(input_path)
                     .into_iter()
                     .filter_map(|e| e.ok())
                     .filter_map(|e| {
