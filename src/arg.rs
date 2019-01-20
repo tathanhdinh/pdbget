@@ -13,7 +13,7 @@ use {
     walkdir::WalkDir,
 };
 
-use crate::error::Result;
+use crate::error::{OtherErrors, Result};
 
 fn try_parse_url(url: &str) -> Result<Url> {
     Url::parse(url).map_err(From::from)
@@ -128,7 +128,8 @@ impl Config {
                     .filter(|p| is_pe(p.as_path()))
                     .collect()
             } else {
-                fail_with_application_error!("input path is neither file nor directory")
+                // fail_with_application_error!("input path is neither file nor directory")
+                return Err(OtherErrors::InputNotFound(format!("{:?}", input_path)).into());
             }
         };
 

@@ -14,8 +14,11 @@ use {
 };
 
 // type GlobalResult = result::Result<(), error::Error>;
+use {
+    crate::error::{Result, OtherErrors}
+};
 
-fn main() -> error::Result<()> {
+fn main() -> Result<()> {
     env_logger::init();
 
     let config = arg::Config::new()?;
@@ -25,7 +28,7 @@ fn main() -> error::Result<()> {
 
     let pe_files = config.scan_pe_files()?;
     if pe_files.is_empty() {
-        fail_with_application_error!("input path is not (or has no) PE");
+        return Err(OtherErrors::InputNotFound("no PE".to_owned()).into());
     }
     println!("ok. Downloading PDBs...");
 

@@ -1,11 +1,11 @@
-use std::{io::Error as IOError, path, result};
+use std::{io::Error as IOError, result};
 
 use {failure::Fail, goblin::error::Error as GoblinError, reqwest};
 
 pub(crate) type Result<T> = result::Result<T, Error>;
 
 #[derive(Fail, Debug)]
-pub(crate) enum Others {
+pub(crate) enum OtherErrors {
     #[fail(display = "PE debug data not found ({})", _0)]
     PeDebugNotFound(String),
 
@@ -36,11 +36,10 @@ pub(crate) enum Error {
     #[fail(display = "General network error: {}", _0)]
     Network(#[cause] reqwest::Error),
 
-    #[fail(display = "Application error: {}", _0)]
-    Application(String),
-
-    #[fail(display = "Application error: ")]
-    Others,
+    // #[fail(display = "Application error: {}", _0)]
+    // Application(String),
+    #[fail(display = "Other error: ")]
+    Other(OtherErrors),
 
     #[fail(display = "End of generator")]
     StopGeneration,
@@ -70,14 +69,20 @@ impl From<reqwest::Error> for Error {
     }
 }
 
-macro_rules! application_error {
-    ($msg:expr) => {
-        crate::error::Error::Application(String::from($msg))
-    };
+impl From<OtherErrors> for Error {
+    fn from(err: OtherErrors) -> Self {
+        Error::Other(err)
+    }
 }
 
-macro_rules! fail_with_application_error {
-    ($msg:expr) => {
-        return Err(application_error!($msg));
-    };
-}
+// macro_rules! application_error {
+//     ($msg:expr) => {
+//         crate::error::Error::Application(String::from($msg))
+//     };
+// }
+
+// macro_rules! fail_with_application_error {
+//     ($msg:expr) => {
+//         return Err(application_error!($msg));
+//     };
+// }

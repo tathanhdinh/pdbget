@@ -13,7 +13,7 @@ use {
     uuid::Uuid,
 };
 
-use crate::error::{Error, Result};
+use crate::error::{Error, OtherErrors, Result};
 
 // thread_local! {
 //     static PDBGET_USER_AGENT: UserAgent = UserAgent::new("Microsoft-Symbol-Server/10.0.0.0");
@@ -36,15 +36,12 @@ impl Pdb {
             pe::PE::parse(&buffer)?
         };
 
-        let debug_data = pe_obj.debug_data.ok_or_else(|| {
-            application_error!(format!("PE debug data not found, file: {:?}", file))
-        })?;
-        let codeview_pdb70 = debug_data.codeview_pdb70_debug_info.ok_or_else(|| {
-            application_error!(format!(
-                "CodeView PDB 7.0 information not found, file: {:?}",
-                file
-            ))
-        })?;
+        let debug_data = pe_obj
+            .debug_data
+            .ok_or_else(|| OtherErrors::PeDebugNotFound(format!("{:?}", file)))?;
+        let codeview_pdb70 = debug_data
+            .codeview_pdb70_debug_info
+            .ok_or_else(|| OtherErrors::PeCodeViewPdbNotFound(format!("{:?}", file)))?;
 
         let name = {
             let base_name = codeview_pdb70
@@ -54,14 +51,13 @@ impl Pdb {
                 .unwrap_or(codeview_pdb70.filename);
 
             let name = String::from_utf8(base_name.to_vec())
-                .map_err(|_| application_error!(format!("bad PDB name, file: {:?}", file)))?;
+                .map_err(|_| OtherErrors::PdbBadName(format!("{:?}", file)))?;
 
             let name = name.trim_matches(char::from(0));
             name.to_owned()
         };
 
         let guid = Uuid::from_bytes(codeview_pdb70.signature);
-        // .map_err(|_| application_error!("CodeView PDB 7.0 bad signature"))?;
 
         Ok(Self {
             name,
@@ -102,7 +98,7 @@ impl Pdb {
                     &pdb_guid_age,
                     &self.name
                 );
-                Url::parse(&new_url_path).map_err(Error::UrlParsing)?
+                Url::parse(&new_url_path)?
             };
 
             let client = Client::new();
@@ -110,7 +106,6 @@ impl Pdb {
                 .get(url)
                 .header(USER_AGENT, PDBGET_USER_AGENT)
                 .send()?
-            // .map_err(Error::NetworkConnection)?
 
             // PDBGET_USER_AGENT
             //     .with(|agent| {
@@ -123,11 +118,17 @@ impl Pdb {
         // check response
         let status = response.status();
         if !status.is_success() {
-            fail_with_application_error!(format!(
-                "bad response, url: {}, code: {}",
+            // fail_with_application_error!(format!(
+            //     "bad response, url: {}, code: {}",
+            //     response.url(),
+            //     status
+            // ));
+            return Err(OtherErrors::ServerBadResponse(format!(
+                "url: {}, code: {}",
                 response.url(),
                 status
-            ));
+            ))
+            .into());
         }
 
         // prepare file for data
