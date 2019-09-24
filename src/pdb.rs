@@ -3,6 +3,8 @@ use std::{
     io::{BufWriter, Read, Write},
     ops::{Generator, GeneratorState},
     path::{Path, PathBuf},
+    pin::Pin,
+    marker::Unpin,
 };
 
 use {
@@ -197,17 +199,18 @@ impl PdbGenerator {
             }
         }
 
-        fn gen_to_iter<G>(g: G) -> impl Iterator<Item = G::Yield>
+        fn gen_to_iter<G: Unpin>(g: G) -> impl Iterator<Item = G::Yield>
         where
             G: Generator<Return = RT>,
         {
             struct It<G>(G);
 
-            impl<G: Generator<Return = Result<()>>> Iterator for It<G> {
+            impl<G: Unpin + Generator<Return = Result<()>>> Iterator for It<G> {
                 type Item = G::Yield;
 
                 fn next(&mut self) -> Option<Self::Item> {
-                    match unsafe { self.0.resume() } {
+                    // match unsafe { self.0.resume() } {
+                    match Pin::new(&mut self.0).as_mut().resume() {
                         GeneratorState::Yielded(y) => Some(y),
                         GeneratorState::Complete(_) => None,
                     }
